@@ -1,0 +1,43 @@
+name: Claude PR Review
+
+on:
+  workflow_call:
+    inputs:
+      review:
+        description: Enable the review (true/false)
+        type: boolean
+        default: false
+      type:
+        description: Review profile, matches prompts/<type>.md (backend | ui | android)
+        type: string
+        required: true
+      extra_prompt:
+        description: Repo-specific instructions appended to the profile prompt
+        type: string
+        default: ""
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: false
+
+jobs:
+  review:
+    # Skip drafts and fork PRs (forks get no secrets).
+    if: >-
+      inputs.review &&
+      !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: claude-review-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: Splitzzyy/pr-reviewer@main
+        with:
+          type: ${{ inputs.type }}
+          extra_prompt: ${{ inputs.extra_prompt }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

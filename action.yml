@@ -1,0 +1,62 @@
+name: Claude PR Review
+description: Review a PR with Claude using a per-stack prompt from prompts/<type>.md
+
+inputs:
+  type:
+    description: Review profile (backend | ui | android)
+    required: true
+  extra_prompt:
+    description: Repo-specific instructions appended to the profile prompt
+    required: false
+    default: ""
+  claude_code_oauth_token:
+    description: Token from `claude setup-token`
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - id: prompt
+      shell: bash
+      env:
+        TYPE: ${{ inputs.type }}
+        EXTRA: ${{ inputs.extra_prompt }}
+        TOKEN: ${{ inputs.claude_code_oauth_token }}
+      run: |
+        if [ -z "$TOKEN" ]; then
+          echo "::error::CLAUDE_CODE_OAUTH_TOKEN secret is missing. Run scripts/set-secret.sh in Splitzzyy/pr-reviewer for this repo."
+          exit 1
+        fi
+        dir="$GITHUB_ACTION_PATH/prompts"
+        valid=$(ls "$dir" | grep -v '^_' | sed 's/\.md$//' | tr '\n' ' ')
+        if ! [[ "$TYPE" =~ ^[a-z0-9-]+$ ]] || [ ! -f "$dir/$TYPE.md" ]; then
+          echo "::error::Unknown review type '$TYPE'. Valid: $valid"
+          exit 1
+        fi
+        echo "Using review profile: $TYPE"
+        delim="EOF_$(openssl rand -hex 8)"
+        {
+          echo "text<<$delim"
+          cat "$dir/_common.md"
+          echo
+          cat "$dir/$TYPE.md"
+          if [ -n "$EXTRA" ]; then
+            echo
+            echo "## Repo-specific instructions"
+            echo "$EXTRA"
+          fi
+          echo "$delim"
+        } >> "$GITHUB_OUTPUT"
+
+    - uses: anthropics/claude-code-action@v1
+      with:
+        claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
+        github_token: ${{ github.token }}
+        track_progress: true
+        prompt: |
+          REPO: ${{ github.repository }}
+          PR NUMBER: ${{ github.event.pull_request.number }}
+
+          ${{ steps.prompt.outputs.text }}
+        claude_args: |
+          --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob"
