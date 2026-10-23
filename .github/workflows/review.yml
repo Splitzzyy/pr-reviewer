@@ -1,4 +1,4 @@
-name: Claude PR Review
+name: PR Review
 
 on:
   workflow_call:
@@ -22,14 +22,16 @@ on:
 jobs:
   review:
     # Skip drafts and fork PRs (forks get no secrets).
+    # New pushes re-review only when the PR has the `re-review` label, to save usage.
     if: >-
       inputs.review &&
       !github.event.pull_request.draft &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.action != 'synchronize' || contains(github.event.pull_request.labels.*.name, 're-review'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:
-      group: claude-review-${{ github.repository }}-${{ github.event.pull_request.number }}
+      group: pr-review-${{ github.repository }}-${{ github.event.pull_request.number }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4

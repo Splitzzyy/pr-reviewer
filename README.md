@@ -1,6 +1,6 @@
 # pr-reviewer
 
-Central Claude PR review for all `Splitzzyy` repos. A repo opts in with `review: true` and picks a profile (`backend`, `ui`, `android`), and Claude posts inline comments plus a summary on every PR.
+Central PR review for all `Splitzzyy` repos. A repo opts in with `review: true` and picks a profile (`backend`, `ui`, `android`), and the reviewer posts inline comments plus a summary on every PR.
 
 ## Enable in a repo
 
@@ -50,4 +50,6 @@ Changes on `main` apply to every repo on its next PR.
 ## Notes
 
 - Draft PRs and PRs from forks are skipped (forks don't get secrets).
+- A PR is reviewed when opened, reopened, or marked ready. New pushes are re-reviewed only if the PR has the `re-review` label.
 - A new push cancels the in-progress review for that PR.
+- Usage limits: small PRs (under 200 changed lines) run on Sonnet, and every review is capped at 50 turns.

@@ -1,5 +1,5 @@
-name: Claude PR Review
-description: Review a PR with Claude using a per-stack prompt from prompts/<type>.md
+name: PR Review
+description: Review a PR using a per-stack prompt from prompts/<type>.md
 
 inputs:
   type:
@@ -22,6 +22,8 @@ runs:
         TYPE: ${{ inputs.type }}
         EXTRA: ${{ inputs.extra_prompt }}
         TOKEN: ${{ inputs.claude_code_oauth_token }}
+        ADDED: ${{ github.event.pull_request.additions }}
+        DELETED: ${{ github.event.pull_request.deletions }}
       run: |
         if [ -z "$TOKEN" ]; then
           echo "::error::CLAUDE_CODE_OAUTH_TOKEN secret is missing. Run scripts/set-secret.sh in Splitzzyy/pr-reviewer for this repo."
@@ -34,6 +36,12 @@ runs:
           exit 1
         fi
         echo "Using review profile: $TYPE"
+        # Small PRs use Sonnet to save usage; larger ones keep the account default model.
+        lines=$(( ${ADDED:-0} + ${DELETED:-0} ))
+        if [ "$lines" -lt 200 ]; then
+          echo "model_arg=--model claude-sonnet-5-5" >> "$GITHUB_OUTPUT"
+        fi
+        echo "Changed lines: $lines"
         delim="EOF_$(openssl rand -hex 8)"
         {
           echo "text<<$delim"
@@ -52,11 +60,12 @@ runs:
       with:
         claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
         github_token: ${{ github.token }}
-        track_progress: true
         prompt: |
           REPO: ${{ github.repository }}
           PR NUMBER: ${{ github.event.pull_request.number }}
 
           ${{ steps.prompt.outputs.text }}
         claude_args: |
+          --max-turns 50
+          ${{ steps.prompt.outputs.model_arg }}
           --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob"
